@@ -19,13 +19,61 @@ def remove_csrf_token(data):
 
 
 def get_errors_from_wtform(form):
-    """Converts errors from a Flask-WTForm into the same format we generate from content-loader forms. This allows us
-    to treat errors from both content-loader forms and wtforms the same way inside templates.
+    """Converts errors from a Flask-WTForm into the same format we generate from content-loader forms.
+
+    Returns a dictionary that includes three keys: `input_name`, `question`,
+    and `message`. The dictionary should be passed to the template as `errors`.
+
+    This allows us to treat errors from both content-loader forms and wtforms
+    the same way inside templates.
+
+    We also include in the dictionary errors in a format suitable for GOV.UK
+    Frontend components:
+
+        # app.py
+        class Form(FlaskForm):
+            input = DMTextInput()
+
+        @flask.route("/")
+        def view():
+            form = Form()
+            errors = get_errors_from_wtform()
+            return render(
+                "template.html",
+                errors=errors,
+            )
+
+        # template.html
+        {{ govukErrorSummary({
+            "errorList": errors.values()
+        }) }}
+
+        {{ govukTextInput({
+            "errorMessage": errors.input.errorMessage,
+        }) }}
+
     :param form: A Flask-WTForm
-    :return: A dict with three keys: `input_name`, `question`, and `message` suitable for passing into templates.
+    :return: A dict with error information in a form suitable for Digital Marketplace templates
     """
     return OrderedDict(
-        (key, {'input_name': key, 'question': form[key].label.text, 'message': form[key].errors[0]})
+        # TODO: remove legacy code (items for frontend toolkit validation banners, 'input-' prefix)
+        (
+            key,
+            {
+                # parameters for digitalmarketplace-frontend-toolkit template toolkit/forms/validation.html
+                "input_name": key, "question": form[key].label.text, "message": form[key].errors[0],
+
+                # parameters for govuk-frontend macro govukErrorSummary
+                "text": form[key].errors[0], "href": f"#input-{key}",
+
+                # parameters for govuk-frontend errorMessage parameter
+                "errorMessage": (
+                    {"text": form[key].errors[0]}
+                    if form[key].errors[0]
+                    else {}
+                )
+            }
+        )
         for key in
         form.errors.keys()
     )
